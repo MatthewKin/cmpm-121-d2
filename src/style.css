@@ -14,9 +14,16 @@ h1 {
   margin: 16px auto;
 }
 
+/* --- Center all buttons together --- */
+.button-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 button {
-  display: block;
-  margin: 10px auto;
   padding: 8px 16px;
   font-size: 16px;
   background-color: #ff69b4;

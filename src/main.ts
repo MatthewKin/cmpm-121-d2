@@ -13,12 +13,26 @@ canvas.height = 256;
 canvas.id = "game-canvas";
 document.body.appendChild(canvas);
 
+// --- Button container ---
+const buttonContainer = document.createElement("div");
+buttonContainer.style.display = "flex";
+buttonContainer.style.justifyContent = "center";
+buttonContainer.style.gap = "10px";
+buttonContainer.style.marginTop = "12px";
+document.body.appendChild(buttonContainer);
+
+// --- Buttons ---
 const clearButton = document.createElement("button");
 clearButton.textContent = "Clear";
-clearButton.style.display = "block";
-clearButton.style.margin = "10px auto";
-clearButton.style.padding = "8px 16px";
-document.body.appendChild(clearButton);
+buttonContainer.appendChild(clearButton);
+
+const undoButton = document.createElement("button");
+undoButton.textContent = "Undo";
+buttonContainer.appendChild(undoButton);
+
+const redoButton = document.createElement("button");
+redoButton.textContent = "Redo";
+buttonContainer.appendChild(redoButton);
 
 // ==========================================================
 //  Canvas Setup
@@ -35,29 +49,33 @@ ctx.strokeStyle = "black";
 //  Drawing State
 // ==========================================================
 type Point = { x: number; y: number };
-let displayList: Point[][] = []; // Each stroke is an array of points
+let displayList: Point[][] = []; // current strokes
+let redoStack: Point[][] = []; // undone strokes
 let currentStroke: Point[] | null = null;
 
 // ==========================================================
-//  Event: Redraw on “drawing-changed”
+//  Redraw on “drawing-changed”
 // ==========================================================
 canvas.addEventListener("drawing-changed", () => {
-  if (!ctx) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx!.clearRect(0, 0, canvas.width, canvas.height);
 
   for (const stroke of displayList) {
     if (stroke.length === 0) continue;
-    ctx.beginPath();
-    ctx.moveTo(stroke[0].x, stroke[0].y);
+    ctx!.beginPath();
+    ctx!.moveTo(stroke[0].x, stroke[0].y);
     for (let i = 1; i < stroke.length; i++) {
-      ctx.lineTo(stroke[i].x, stroke[i].y);
+      ctx!.lineTo(stroke[i].x, stroke[i].y);
     }
-    ctx.stroke();
+    ctx!.stroke();
   }
+
+  // Disable buttons if nothing to undo/redo
+  undoButton.disabled = displayList.length === 0;
+  redoButton.disabled = redoStack.length === 0;
 });
 
 // ==========================================================
-//  Helper: Get Mouse Position
+//  Helpers
 // ==========================================================
 function getMousePos(e: MouseEvent): Point {
   const rect = canvas.getBoundingClientRect();
@@ -73,6 +91,7 @@ canvas.addEventListener("mousedown", (e) => {
   isDrawing = true;
   currentStroke = [];
   displayList.push(currentStroke);
+  redoStack = []; // ✅ Clear redo stack when new stroke starts
   currentStroke.push(getMousePos(e));
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
@@ -87,9 +106,29 @@ canvas.addEventListener("mouseup", () => (isDrawing = false));
 canvas.addEventListener("mouseout", () => (isDrawing = false));
 
 // ==========================================================
-//  Clear Button
+//  Buttons: Clear, Undo, Redo
 // ==========================================================
 clearButton.addEventListener("click", () => {
   displayList = [];
+  redoStack = [];
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
+
+undoButton.addEventListener("click", () => {
+  if (displayList.length === 0) return;
+  const undone = displayList.pop();
+  if (undone) redoStack.push(undone);
+  canvas.dispatchEvent(new Event("drawing-changed"));
+});
+
+redoButton.addEventListener("click", () => {
+  if (redoStack.length === 0) return;
+  const redone = redoStack.pop();
+  if (redone) displayList.push(redone);
+  canvas.dispatchEvent(new Event("drawing-changed"));
+});
+
+// ==========================================================
+//  Initial UI State
+// ==========================================================
+canvas.dispatchEvent(new Event("drawing-changed"));
