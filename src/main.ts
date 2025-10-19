@@ -14,12 +14,10 @@ canvas.id = "game-canvas";
 document.body.appendChild(canvas);
 
 // --- Button containers ---
-// First row: Clear / Undo / Redo
 const actionContainer = document.createElement("div");
 actionContainer.classList.add("button-container");
 document.body.appendChild(actionContainer);
 
-// Second row: marker tools
 const toolContainer = document.createElement("div");
 toolContainer.classList.add("button-container");
 document.body.appendChild(toolContainer);
@@ -91,9 +89,35 @@ class MarkerCommand implements DisplayCommand {
   }
 }
 
+// ToolPreview displays a circle where the tool will draw
+class ToolPreview implements DisplayCommand {
+  x: number;
+  y: number;
+  thickness: number;
+
+  constructor(x: number, y: number, thickness: number) {
+    this.x = x;
+    this.y = y;
+    this.thickness = thickness;
+  }
+
+  display(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.strokeStyle = "gray";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.thickness / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 let displayList: DisplayCommand[] = [];
 let redoStack: DisplayCommand[] = [];
 let currentCommand: MarkerCommand | null = null;
+
+// NEW: current tool preview object
+let currentPreview: ToolPreview | null = null;
 
 // tool state
 let currentThickness = 2;
@@ -104,6 +128,10 @@ let currentThickness = 2;
 canvas.addEventListener("drawing-changed", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (const cmd of displayList) cmd.display(ctx);
+
+  // draw preview if not drawing
+  if (!isDrawing && currentPreview) currentPreview.display(ctx);
+
   undoButton.disabled = displayList.length === 0;
   redoButton.disabled = redoStack.length === 0;
 });
@@ -132,8 +160,14 @@ canvas.addEventListener("mousedown", (e) => {
 });
 
 canvas.addEventListener("mousemove", (e) => {
-  if (!isDrawing || !currentCommand) return;
   const { x, y } = getMousePos(e);
+
+  // Always fire tool-moved event
+  canvas.dispatchEvent(
+    new CustomEvent("tool-moved", { detail: { x, y } }),
+  );
+
+  if (!isDrawing || !currentCommand) return;
   currentCommand.drag(x, y);
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
@@ -141,10 +175,13 @@ canvas.addEventListener("mousemove", (e) => {
 canvas.addEventListener("mouseup", () => {
   isDrawing = false;
   currentCommand = null;
+  canvas.dispatchEvent(new Event("drawing-changed"));
 });
+
 canvas.addEventListener("mouseout", () => {
   isDrawing = false;
-  currentCommand = null;
+  currentPreview = null;
+  canvas.dispatchEvent(new Event("drawing-changed"));
 });
 
 // ==========================================================
@@ -188,6 +225,17 @@ selectTool(2, thinButton);
 // hook up buttons
 thinButton.addEventListener("click", () => selectTool(2, thinButton));
 thickButton.addEventListener("click", () => selectTool(6, thickButton));
+
+// ==========================================================
+//  Tool Preview Handling (NEW)
+// ==========================================================
+canvas.addEventListener("tool-moved", (e: Event) => {
+  const { x, y } = (e as CustomEvent).detail;
+  if (!isDrawing) {
+    currentPreview = new ToolPreview(x, y, currentThickness);
+  }
+  canvas.dispatchEvent(new Event("drawing-changed"));
+});
 
 // ==========================================================
 //  Initial UI State
