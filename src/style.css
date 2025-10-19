@@ -14,13 +14,13 @@ h1 {
   margin: 16px auto;
 }
 
-/* --- Center all buttons together --- */
+/* --- Center buttons --- */
 .button-container {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
 button {
@@ -37,4 +37,9 @@ button {
 button:hover {
   background-color: #ff5ca8;
   transform: scale(1.05);
+}
+
+.selectedTool {
+  background-color: #4caf50;
+  color: white;
 }

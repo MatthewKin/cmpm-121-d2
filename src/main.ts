@@ -13,49 +13,58 @@ canvas.height = 256;
 canvas.id = "game-canvas";
 document.body.appendChild(canvas);
 
-// --- Button container ---
-const buttonContainer = document.createElement("div");
-buttonContainer.style.display = "flex";
-buttonContainer.style.justifyContent = "center";
-buttonContainer.style.gap = "10px";
-buttonContainer.style.marginTop = "12px";
-document.body.appendChild(buttonContainer);
+// --- Button containers ---
+// First row: Clear / Undo / Redo
+const actionContainer = document.createElement("div");
+actionContainer.classList.add("button-container");
+document.body.appendChild(actionContainer);
 
-// --- Buttons ---
+// Second row: marker tools
+const toolContainer = document.createElement("div");
+toolContainer.classList.add("button-container");
+document.body.appendChild(toolContainer);
+
+// --- Buttons (Row 1) ---
 const clearButton = document.createElement("button");
 clearButton.textContent = "Clear";
-buttonContainer.appendChild(clearButton);
+actionContainer.appendChild(clearButton);
 
 const undoButton = document.createElement("button");
 undoButton.textContent = "Undo";
-buttonContainer.appendChild(undoButton);
+actionContainer.appendChild(undoButton);
 
 const redoButton = document.createElement("button");
 redoButton.textContent = "Redo";
-buttonContainer.appendChild(redoButton);
+actionContainer.appendChild(redoButton);
+
+// --- Marker tool buttons (Row 2) ---
+const thinButton = document.createElement("button");
+thinButton.textContent = "Thin Marker";
+toolContainer.appendChild(thinButton);
+
+const thickButton = document.createElement("button");
+thickButton.textContent = "Thick Marker";
+toolContainer.appendChild(thickButton);
 
 // ==========================================================
 //  Canvas Setup
 // ==========================================================
 const ctx = canvas.getContext("2d");
 if (!ctx) throw new Error("2D context not supported");
-
-// set some sensible defaults (commands may override when drawing)
 ctx.lineCap = "round";
 ctx.lineJoin = "round";
 ctx.strokeStyle = "black";
 
 // ==========================================================
-//  Drawing State — now holds DisplayCommand objects
+//  Drawing State
 // ==========================================================
 type Point = { x: number; y: number };
 
-// ------------- command interface -------------
 interface DisplayCommand {
   display(ctx: CanvasRenderingContext2D): void;
 }
 
-// ------------- MarkerCommand replaces raw Point[][] -------------
+// MarkerCommand represents one drawn line
 class MarkerCommand implements DisplayCommand {
   points: Point[] = [];
   thickness: number;
@@ -64,15 +73,12 @@ class MarkerCommand implements DisplayCommand {
     this.thickness = thickness;
   }
 
-  // called while dragging to extend the stroke
   drag(x: number, y: number) {
     this.points.push({ x, y });
   }
 
-  // draws this command to the canvas
   display(ctx: CanvasRenderingContext2D) {
     if (this.points.length === 0) return;
-    // save/restore so we don't permanently change ctx state
     ctx.save();
     ctx.lineWidth = this.thickness;
     ctx.beginPath();
@@ -85,25 +91,19 @@ class MarkerCommand implements DisplayCommand {
   }
 }
 
-// Display list and stacks now hold DisplayCommand objects
 let displayList: DisplayCommand[] = [];
 let redoStack: DisplayCommand[] = [];
 let currentCommand: MarkerCommand | null = null;
 
-// small helper for current marker thickness
-const currentThickness = 2;
+// tool state
+let currentThickness = 2;
 
 // ==========================================================
 //  Redraw on “drawing-changed”
 // ==========================================================
 canvas.addEventListener("drawing-changed", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  for (const cmd of displayList) {
-    cmd.display(ctx);
-  }
-
-  // Disable buttons if nothing to undo/redo
+  for (const cmd of displayList) cmd.display(ctx);
   undoButton.disabled = displayList.length === 0;
   redoButton.disabled = redoStack.length === 0;
 });
@@ -117,7 +117,7 @@ function getMousePos(e: MouseEvent): Point {
 }
 
 // ==========================================================
-//  Mouse Events (create/extend MarkerCommand objects)
+//  Mouse Events
 // ==========================================================
 let isDrawing = false;
 
@@ -125,7 +125,7 @@ canvas.addEventListener("mousedown", (e) => {
   isDrawing = true;
   currentCommand = new MarkerCommand(currentThickness);
   displayList.push(currentCommand);
-  redoStack = []; // clear redo stack when new action starts
+  redoStack = [];
   const { x, y } = getMousePos(e);
   currentCommand.drag(x, y);
   canvas.dispatchEvent(new Event("drawing-changed"));
@@ -140,7 +140,7 @@ canvas.addEventListener("mousemove", (e) => {
 
 canvas.addEventListener("mouseup", () => {
   isDrawing = false;
-  currentCommand = null; // stop holding reference to finished command
+  currentCommand = null;
 });
 canvas.addEventListener("mouseout", () => {
   isDrawing = false;
@@ -148,7 +148,7 @@ canvas.addEventListener("mouseout", () => {
 });
 
 // ==========================================================
-//  Buttons: Clear, Undo, Redo (work with commands now)
+//  Buttons: Clear, Undo, Redo
 // ==========================================================
 clearButton.addEventListener("click", () => {
   displayList = [];
@@ -169,6 +169,25 @@ redoButton.addEventListener("click", () => {
   if (redone) displayList.push(redone);
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
+
+// ==========================================================
+//  Marker Tool Selection
+// ==========================================================
+function selectTool(thickness: number, selectedButton: HTMLButtonElement) {
+  currentThickness = thickness;
+
+  for (const btn of [thinButton, thickButton]) {
+    btn.classList.remove("selectedTool");
+  }
+  selectedButton.classList.add("selectedTool");
+}
+
+// default selected tool
+selectTool(2, thinButton);
+
+// hook up buttons
+thinButton.addEventListener("click", () => selectTool(2, thinButton));
+thickButton.addEventListener("click", () => selectTool(6, thickButton));
 
 // ==========================================================
 //  Initial UI State
