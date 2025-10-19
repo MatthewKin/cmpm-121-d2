@@ -40,33 +40,67 @@ buttonContainer.appendChild(redoButton);
 const ctx = canvas.getContext("2d");
 if (!ctx) throw new Error("2D context not supported");
 
-ctx.lineWidth = 2;
+// set some sensible defaults (commands may override when drawing)
 ctx.lineCap = "round";
 ctx.lineJoin = "round";
 ctx.strokeStyle = "black";
 
 // ==========================================================
-//  Drawing State
+//  Drawing State — now holds DisplayCommand objects
 // ==========================================================
 type Point = { x: number; y: number };
-let displayList: Point[][] = []; // current strokes
-let redoStack: Point[][] = []; // undone strokes
-let currentStroke: Point[] | null = null;
+
+// ------------- command interface -------------
+interface DisplayCommand {
+  display(ctx: CanvasRenderingContext2D): void;
+}
+
+// ------------- MarkerCommand replaces raw Point[][] -------------
+class MarkerCommand implements DisplayCommand {
+  points: Point[] = [];
+  thickness: number;
+
+  constructor(thickness = 2) {
+    this.thickness = thickness;
+  }
+
+  // called while dragging to extend the stroke
+  drag(x: number, y: number) {
+    this.points.push({ x, y });
+  }
+
+  // draws this command to the canvas
+  display(ctx: CanvasRenderingContext2D) {
+    if (this.points.length === 0) return;
+    // save/restore so we don't permanently change ctx state
+    ctx.save();
+    ctx.lineWidth = this.thickness;
+    ctx.beginPath();
+    ctx.moveTo(this.points[0].x, this.points[0].y);
+    for (let i = 1; i < this.points.length; i++) {
+      ctx.lineTo(this.points[i].x, this.points[i].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// Display list and stacks now hold DisplayCommand objects
+let displayList: DisplayCommand[] = [];
+let redoStack: DisplayCommand[] = [];
+let currentCommand: MarkerCommand | null = null;
+
+// small helper for current marker thickness
+const currentThickness = 2;
 
 // ==========================================================
 //  Redraw on “drawing-changed”
 // ==========================================================
 canvas.addEventListener("drawing-changed", () => {
-  ctx!.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (const stroke of displayList) {
-    if (stroke.length === 0) continue;
-    ctx!.beginPath();
-    ctx!.moveTo(stroke[0].x, stroke[0].y);
-    for (let i = 1; i < stroke.length; i++) {
-      ctx!.lineTo(stroke[i].x, stroke[i].y);
-    }
-    ctx!.stroke();
+  for (const cmd of displayList) {
+    cmd.display(ctx);
   }
 
   // Disable buttons if nothing to undo/redo
@@ -83,30 +117,38 @@ function getMousePos(e: MouseEvent): Point {
 }
 
 // ==========================================================
-//  Mouse Events
+//  Mouse Events (create/extend MarkerCommand objects)
 // ==========================================================
 let isDrawing = false;
 
 canvas.addEventListener("mousedown", (e) => {
   isDrawing = true;
-  currentStroke = [];
-  displayList.push(currentStroke);
-  redoStack = []; // ✅ Clear redo stack when new stroke starts
-  currentStroke.push(getMousePos(e));
+  currentCommand = new MarkerCommand(currentThickness);
+  displayList.push(currentCommand);
+  redoStack = []; // clear redo stack when new action starts
+  const { x, y } = getMousePos(e);
+  currentCommand.drag(x, y);
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
 
 canvas.addEventListener("mousemove", (e) => {
-  if (!isDrawing || !currentStroke) return;
-  currentStroke.push(getMousePos(e));
+  if (!isDrawing || !currentCommand) return;
+  const { x, y } = getMousePos(e);
+  currentCommand.drag(x, y);
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
 
-canvas.addEventListener("mouseup", () => (isDrawing = false));
-canvas.addEventListener("mouseout", () => (isDrawing = false));
+canvas.addEventListener("mouseup", () => {
+  isDrawing = false;
+  currentCommand = null; // stop holding reference to finished command
+});
+canvas.addEventListener("mouseout", () => {
+  isDrawing = false;
+  currentCommand = null;
+});
 
 // ==========================================================
-//  Buttons: Clear, Undo, Redo
+//  Buttons: Clear, Undo, Redo (work with commands now)
 // ==========================================================
 clearButton.addEventListener("click", () => {
   displayList = [];
