@@ -22,6 +22,10 @@ const toolContainer = document.createElement("div");
 toolContainer.classList.add("button-container");
 document.body.appendChild(toolContainer);
 
+const stickerContainer = document.createElement("div");
+stickerContainer.classList.add("button-container");
+document.body.appendChild(stickerContainer);
+
 // --- Buttons (Row 1) ---
 const clearButton = document.createElement("button");
 clearButton.textContent = "Clear";
@@ -43,6 +47,19 @@ toolContainer.appendChild(thinButton);
 const thickButton = document.createElement("button");
 thickButton.textContent = "Thick Marker";
 toolContainer.appendChild(thickButton);
+
+// --- Sticker buttons (Row 3 - NEW) ---
+const fishButton = document.createElement("button");
+fishButton.textContent = "🐟";
+stickerContainer.appendChild(fishButton);
+
+const flowerButton = document.createElement("button");
+flowerButton.textContent = "🌸";
+stickerContainer.appendChild(flowerButton);
+
+const smileButton = document.createElement("button");
+smileButton.textContent = "😀";
+stickerContainer.appendChild(smileButton);
 
 // ==========================================================
 //  Canvas Setup
@@ -91,16 +108,7 @@ class MarkerCommand implements DisplayCommand {
 
 // ToolPreview displays a circle where the tool will draw
 class ToolPreview implements DisplayCommand {
-  x: number;
-  y: number;
-  thickness: number;
-
-  constructor(x: number, y: number, thickness: number) {
-    this.x = x;
-    this.y = y;
-    this.thickness = thickness;
-  }
-
+  constructor(public x: number, public y: number, public thickness: number) {}
   display(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.strokeStyle = "gray";
@@ -112,15 +120,42 @@ class ToolPreview implements DisplayCommand {
   }
 }
 
+// StickerCommand draws a placed emoji (NEW)
+class StickerCommand implements DisplayCommand {
+  constructor(public x: number, public y: number, public emoji: string) {}
+  display(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.font = "24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.emoji, this.x, this.y);
+    ctx.restore();
+  }
+}
+
+// StickerPreview displays the emoji under the cursor (NEW)
+class StickerPreview implements DisplayCommand {
+  constructor(public x: number, public y: number, public emoji: string) {}
+  display(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.font = "24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.emoji, this.x, this.y);
+    ctx.restore();
+  }
+}
+
 let displayList: DisplayCommand[] = [];
 let redoStack: DisplayCommand[] = [];
 let currentCommand: MarkerCommand | null = null;
-
-// NEW: current tool preview object
-let currentPreview: ToolPreview | null = null;
+let currentPreview: DisplayCommand | null = null;
 
 // tool state
 let currentThickness = 2;
+let currentTool: "marker" | "sticker" = "marker";
+let currentSticker = "🐟";
 
 // ==========================================================
 //  Redraw on “drawing-changed”
@@ -129,7 +164,6 @@ canvas.addEventListener("drawing-changed", () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (const cmd of displayList) cmd.display(ctx);
 
-  // draw preview if not drawing
   if (!isDrawing && currentPreview) currentPreview.display(ctx);
 
   undoButton.disabled = displayList.length === 0;
@@ -150,12 +184,18 @@ function getMousePos(e: MouseEvent): Point {
 let isDrawing = false;
 
 canvas.addEventListener("mousedown", (e) => {
-  isDrawing = true;
-  currentCommand = new MarkerCommand(currentThickness);
-  displayList.push(currentCommand);
-  redoStack = [];
   const { x, y } = getMousePos(e);
-  currentCommand.drag(x, y);
+
+  if (currentTool === "marker") {
+    isDrawing = true;
+    currentCommand = new MarkerCommand(currentThickness);
+    displayList.push(currentCommand);
+    redoStack = [];
+    currentCommand.drag(x, y);
+  } else if (currentTool === "sticker") {
+    displayList.push(new StickerCommand(x, y, currentSticker));
+  }
+
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
 
@@ -163,13 +203,12 @@ canvas.addEventListener("mousemove", (e) => {
   const { x, y } = getMousePos(e);
 
   // Always fire tool-moved event
-  canvas.dispatchEvent(
-    new CustomEvent("tool-moved", { detail: { x, y } }),
-  );
+  canvas.dispatchEvent(new CustomEvent("tool-moved", { detail: { x, y } }));
 
-  if (!isDrawing || !currentCommand) return;
-  currentCommand.drag(x, y);
-  canvas.dispatchEvent(new Event("drawing-changed"));
+  if (isDrawing && currentCommand) {
+    currentCommand.drag(x, y);
+    canvas.dispatchEvent(new Event("drawing-changed"));
+  }
 });
 
 canvas.addEventListener("mouseup", () => {
@@ -211,29 +250,66 @@ redoButton.addEventListener("click", () => {
 //  Marker Tool Selection
 // ==========================================================
 function selectTool(thickness: number, selectedButton: HTMLButtonElement) {
+  currentTool = "marker";
   currentThickness = thickness;
 
-  for (const btn of [thinButton, thickButton]) {
+  for (
+    const btn of [
+      thinButton,
+      thickButton,
+      fishButton,
+      flowerButton,
+      smileButton,
+    ]
+  ) {
     btn.classList.remove("selectedTool");
   }
   selectedButton.classList.add("selectedTool");
 }
 
-// default selected tool
 selectTool(2, thinButton);
-
-// hook up buttons
 thinButton.addEventListener("click", () => selectTool(2, thinButton));
 thickButton.addEventListener("click", () => selectTool(6, thickButton));
 
 // ==========================================================
-//  Tool Preview Handling (NEW)
+//  Sticker Tool Selection (NEW)
+// ==========================================================
+function selectSticker(emoji: string, selectedButton: HTMLButtonElement) {
+  currentTool = "sticker";
+  currentSticker = emoji;
+
+  for (
+    const btn of [
+      thinButton,
+      thickButton,
+      fishButton,
+      flowerButton,
+      smileButton,
+    ]
+  ) {
+    btn.classList.remove("selectedTool");
+  }
+  selectedButton.classList.add("selectedTool");
+}
+
+fishButton.addEventListener("click", () => selectSticker("🐟", fishButton));
+flowerButton.addEventListener("click", () => selectSticker("🌸", flowerButton));
+smileButton.addEventListener("click", () => selectSticker("😀", smileButton));
+
+// ==========================================================
+//  Tool Preview Handling
 // ==========================================================
 canvas.addEventListener("tool-moved", (e: Event) => {
   const { x, y } = (e as CustomEvent).detail;
+
   if (!isDrawing) {
-    currentPreview = new ToolPreview(x, y, currentThickness);
+    if (currentTool === "marker") {
+      currentPreview = new ToolPreview(x, y, currentThickness);
+    } else if (currentTool === "sticker") {
+      currentPreview = new StickerPreview(x, y, currentSticker);
+    }
   }
+
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
 
