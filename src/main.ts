@@ -192,8 +192,6 @@ canvas.addEventListener("mousedown", (e) => {
     displayList.push(currentCommand);
     redoStack = [];
     currentCommand.drag(x, y);
-  } else if (currentTool === "sticker") {
-    displayList.push(new StickerCommand(x, y, currentSticker));
   }
 
   canvas.dispatchEvent(new Event("drawing-changed"));
@@ -211,9 +209,18 @@ canvas.addEventListener("mousemove", (e) => {
   }
 });
 
-canvas.addEventListener("mouseup", () => {
-  isDrawing = false;
-  currentCommand = null;
+canvas.addEventListener("mouseup", (e) => {
+  const { x, y } = getMousePos(e);
+
+  if (currentTool === "marker") {
+    isDrawing = false;
+    currentCommand = null;
+  } else if (currentTool === "sticker") {
+    // ✨ Sticker now drops on mouse release
+    displayList.push(new StickerCommand(x, y, currentSticker));
+    redoStack = [];
+  }
+
   canvas.dispatchEvent(new Event("drawing-changed"));
 });
 
