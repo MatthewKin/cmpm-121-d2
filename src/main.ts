@@ -279,29 +279,56 @@ thinButton.addEventListener("click", () => selectTool(2, thinButton));
 thickButton.addEventListener("click", () => selectTool(6, thickButton));
 
 // ==========================================================
-//  Sticker Tool Selection (NEW)
+//  Sticker Buttons (Data-Driven)
+// ==========================================================
+
+// Initial stickers array — this defines all available stickers.
+let stickers = ["🐟", "🌸", "😀"];
+
+// Function to rebuild the sticker buttons from the array
+function renderStickerButtons() {
+  // Clear the existing buttons
+  stickerContainer.innerHTML = "";
+
+  // Create a button for each sticker in the array
+  stickers.forEach((emoji) => {
+    const btn = document.createElement("button");
+    btn.textContent = emoji;
+    stickerContainer.appendChild(btn);
+
+    btn.addEventListener("click", () => selectSticker(emoji, btn));
+  });
+
+  // Add a special button for custom stickers
+  const customButton = document.createElement("button");
+  customButton.textContent = "➕ Custom Sticker";
+  customButton.addEventListener("click", () => {
+    const text = prompt("Custom sticker text", "🧽");
+    if (text && text.trim() !== "") {
+      // Add new sticker and re-render
+      stickers.push(text);
+      renderStickerButtons();
+    }
+  });
+  stickerContainer.appendChild(customButton);
+}
+
+// ==========================================================
+//  Sticker Tool Selection (Reused)
 // ==========================================================
 function selectSticker(emoji: string, selectedButton: HTMLButtonElement) {
   currentTool = "sticker";
   currentSticker = emoji;
 
-  for (
-    const btn of [
-      thinButton,
-      thickButton,
-      fishButton,
-      flowerButton,
-      smileButton,
-    ]
-  ) {
-    btn.classList.remove("selectedTool");
-  }
+  // Remove 'selectedTool' class from all tool/sticker buttons
+  const allButtons = document.querySelectorAll("button");
+  allButtons.forEach((b) => b.classList.remove("selectedTool"));
+
   selectedButton.classList.add("selectedTool");
 }
 
-fishButton.addEventListener("click", () => selectSticker("🐟", fishButton));
-flowerButton.addEventListener("click", () => selectSticker("🌸", flowerButton));
-smileButton.addEventListener("click", () => selectSticker("😀", smileButton));
+// Render initial stickers
+renderStickerButtons();
 
 // ==========================================================
 //  Tool Preview Handling
