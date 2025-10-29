@@ -4,7 +4,7 @@ import "./style.css";
 //  UI Setup
 // ==========================================================
 const appTitle = document.createElement("h1");
-appTitle.textContent = "The Really Cool And Epic Canvas";
+appTitle.textContent = "The Garden Sketchbook 🌿";
 document.body.prepend(appTitle);
 
 const canvas = document.createElement("canvas");
@@ -48,19 +48,6 @@ const thickButton = document.createElement("button");
 thickButton.textContent = "Thick Marker";
 toolContainer.appendChild(thickButton);
 
-// --- Sticker buttons (Row 3 - NEW) ---
-const sunflowerButton = document.createElement("button");
-sunflowerButton.textContent = "🌻";
-stickerContainer.appendChild(sunflowerButton);
-
-const flowerButton = document.createElement("button");
-flowerButton.textContent = "🌸";
-stickerContainer.appendChild(flowerButton);
-
-const roseButton = document.createElement("button");
-roseButton.textContent = "🌷";
-stickerContainer.appendChild(roseButton);
-
 // ==========================================================
 //  Canvas Setup
 // ==========================================================
@@ -83,9 +70,11 @@ interface DisplayCommand {
 class MarkerCommand implements DisplayCommand {
   points: Point[] = [];
   thickness: number;
+  color: string;
 
-  constructor(thickness = 2) {
+  constructor(thickness = 2, color = "black") {
     this.thickness = thickness;
+    this.color = color;
   }
 
   drag(x: number, y: number) {
@@ -96,6 +85,7 @@ class MarkerCommand implements DisplayCommand {
     if (this.points.length === 0) return;
     ctx.save();
     ctx.lineWidth = this.thickness;
+    ctx.strokeStyle = this.color;
     ctx.beginPath();
     ctx.moveTo(this.points[0].x, this.points[0].y);
     for (let i = 1; i < this.points.length; i++) {
@@ -108,11 +98,16 @@ class MarkerCommand implements DisplayCommand {
 
 // ToolPreview displays a circle where the tool will draw
 class ToolPreview implements DisplayCommand {
-  constructor(public x: number, public y: number, public thickness: number) {}
+  constructor(
+    public x: number,
+    public y: number,
+    public thickness: number,
+    public color: string,
+  ) {}
   display(ctx: CanvasRenderingContext2D) {
     ctx.save();
-    ctx.strokeStyle = "gray";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.thickness / 2, 0, Math.PI * 2);
     ctx.stroke();
@@ -122,27 +117,41 @@ class ToolPreview implements DisplayCommand {
 
 // StickerCommand draws a placed emoji (NEW)
 class StickerCommand implements DisplayCommand {
-  constructor(public x: number, public y: number, public emoji: string) {}
+  constructor(
+    public x: number,
+    public y: number,
+    public emoji: string,
+    public rotation: number,
+  ) {}
   display(ctx: CanvasRenderingContext2D) {
     ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate((this.rotation * Math.PI) / 180);
     ctx.font = "32px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(this.emoji, this.x, this.y);
+    ctx.fillText(this.emoji, 0, 0);
     ctx.restore();
   }
 }
 
 // StickerPreview displays the emoji under the cursor (NEW)
 class StickerPreview implements DisplayCommand {
-  constructor(public x: number, public y: number, public emoji: string) {}
+  constructor(
+    public x: number,
+    public y: number,
+    public emoji: string,
+    public rotation: number,
+  ) {}
   display(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.globalAlpha = 0.5;
+    ctx.translate(this.x, this.y);
+    ctx.rotate((this.rotation * Math.PI) / 180);
     ctx.font = "24px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(this.emoji, this.x, this.y);
+    ctx.fillText(this.emoji, 0, 0);
     ctx.restore();
   }
 }
@@ -152,10 +161,23 @@ let redoStack: DisplayCommand[] = [];
 let currentCommand: MarkerCommand | null = null;
 let currentPreview: DisplayCommand | null = null;
 
-// tool state
+// ==========================================================
+//  Tool State
+// ==========================================================
 let currentThickness = 2;
 let currentTool: "marker" | "sticker" = "marker";
-let currentSticker = "🐟";
+let currentSticker = "🌻";
+let currentStickerRotation = 0;
+let currentMarkerColor = "black";
+
+// Helper: random color and rotation
+function getRandomColor() {
+  const hue = Math.floor(Math.random() * 360);
+  return `hsl(${hue}, 90%, 55%)`;
+}
+function getRandomRotation() {
+  return Math.random() * 360;
+}
 
 // ==========================================================
 //  Redraw on “drawing-changed”
@@ -188,7 +210,7 @@ canvas.addEventListener("mousedown", (e) => {
 
   if (currentTool === "marker") {
     isDrawing = true;
-    currentCommand = new MarkerCommand(currentThickness);
+    currentCommand = new MarkerCommand(currentThickness, currentMarkerColor);
     displayList.push(currentCommand);
     redoStack = [];
     currentCommand.drag(x, y);
@@ -200,7 +222,6 @@ canvas.addEventListener("mousedown", (e) => {
 canvas.addEventListener("mousemove", (e) => {
   const { x, y } = getMousePos(e);
 
-  // Always fire tool-moved event
   canvas.dispatchEvent(new CustomEvent("tool-moved", { detail: { x, y } }));
 
   if (isDrawing && currentCommand) {
@@ -216,8 +237,9 @@ canvas.addEventListener("mouseup", (e) => {
     isDrawing = false;
     currentCommand = null;
   } else if (currentTool === "sticker") {
-    // ✨ Sticker now drops on mouse release
-    displayList.push(new StickerCommand(x, y, currentSticker));
+    displayList.push(
+      new StickerCommand(x, y, currentSticker, currentStickerRotation),
+    );
     redoStack = [];
   }
 
@@ -261,24 +283,17 @@ exportButton.textContent = "Export PNG";
 actionContainer.appendChild(exportButton);
 
 exportButton.addEventListener("click", () => {
-  // 1️ Create a new high-res canvas
   const exportCanvas = document.createElement("canvas");
   exportCanvas.width = 1024;
   exportCanvas.height = 1024;
   const exportCtx = exportCanvas.getContext("2d");
   if (!exportCtx) return;
 
-  // 2️ Scale context to 4x since your original canvas is 256×256
   exportCtx.scale(4, 4);
+  for (const cmd of displayList) cmd.display(exportCtx);
 
-  // 3️ Draw all permanent display commands (ignore previews)
-  for (const cmd of displayList) {
-    cmd.display(exportCtx);
-  }
-
-  // 4️⃣ Convert to PNG and trigger download
   const link = document.createElement("a");
-  link.download = "canvas-export.png";
+  link.download = "garden-sketch.png";
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
 });
@@ -289,19 +304,14 @@ exportButton.addEventListener("click", () => {
 function selectTool(thickness: number, selectedButton: HTMLButtonElement) {
   currentTool = "marker";
   currentThickness = thickness;
+  currentMarkerColor = getRandomColor(); // randomize each time tool selected
 
-  for (
-    const btn of [
-      thinButton,
-      thickButton,
-      sunflowerButton,
-      flowerButton,
-      roseButton,
-    ]
-  ) {
+  for (const btn of document.querySelectorAll("button")) {
     btn.classList.remove("selectedTool");
   }
   selectedButton.classList.add("selectedTool");
+
+  canvas.dispatchEvent(new Event("drawing-changed"));
 }
 
 selectTool(2, thinButton);
@@ -309,56 +319,47 @@ thinButton.addEventListener("click", () => selectTool(2, thinButton));
 thickButton.addEventListener("click", () => selectTool(6, thickButton));
 
 // ==========================================================
-//  Sticker Buttons (Data-Driven)
+//  Sticker Buttons (Garden Theme)
 // ==========================================================
+let gardenStickers = [
+  "🌻",
+  "🌷",
+  "🌿",
+  "🍄",
+  "🌞",
+  "🦋",
+  "🐝",
+  "🍃",
+  "🌼",
+  "🌸",
+];
 
-// Initial stickers array — this defines all available stickers.
-let stickers = ["🌻", "🌸", "🌷"];
-
-// Function to rebuild the sticker buttons from the array
 function renderStickerButtons() {
-  // Clear the existing buttons
   stickerContainer.innerHTML = "";
-
-  // Create a button for each sticker in the array
-  stickers.forEach((emoji) => {
+  gardenStickers.forEach((emoji) => {
     const btn = document.createElement("button");
     btn.textContent = emoji;
     stickerContainer.appendChild(btn);
-
     btn.addEventListener("click", () => selectSticker(emoji, btn));
   });
-
-  // Add a special button for custom stickers
-  const customButton = document.createElement("button");
-  customButton.textContent = "➕ Custom Sticker";
-  customButton.addEventListener("click", () => {
-    const text = prompt("Custom sticker text", "🧽");
-    if (text && text.trim() !== "") {
-      // Add new sticker and re-render
-      stickers.push(text);
-      renderStickerButtons();
-    }
-  });
-  stickerContainer.appendChild(customButton);
 }
+renderStickerButtons();
 
 // ==========================================================
-//  Sticker Tool Selection (Reused)
+//  Sticker Tool Selection with Random Rotation
 // ==========================================================
 function selectSticker(emoji: string, selectedButton: HTMLButtonElement) {
   currentTool = "sticker";
   currentSticker = emoji;
+  currentStickerRotation = getRandomRotation(); // random rotation
 
-  // Remove 'selectedTool' class from all tool/sticker buttons
-  const allButtons = document.querySelectorAll("button");
-  allButtons.forEach((b) => b.classList.remove("selectedTool"));
-
+  for (const btn of document.querySelectorAll("button")) {
+    btn.classList.remove("selectedTool");
+  }
   selectedButton.classList.add("selectedTool");
-}
 
-// Render initial stickers
-renderStickerButtons();
+  canvas.dispatchEvent(new Event("drawing-changed"));
+}
 
 // ==========================================================
 //  Tool Preview Handling
@@ -368,9 +369,19 @@ canvas.addEventListener("tool-moved", (e: Event) => {
 
   if (!isDrawing) {
     if (currentTool === "marker") {
-      currentPreview = new ToolPreview(x, y, currentThickness);
+      currentPreview = new ToolPreview(
+        x,
+        y,
+        currentThickness,
+        currentMarkerColor,
+      );
     } else if (currentTool === "sticker") {
-      currentPreview = new StickerPreview(x, y, currentSticker);
+      currentPreview = new StickerPreview(
+        x,
+        y,
+        currentSticker,
+        currentStickerRotation,
+      );
     }
   }
 
