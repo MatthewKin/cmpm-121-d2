@@ -321,7 +321,7 @@ thickButton.addEventListener("click", () => selectTool(6, thickButton));
 // ==========================================================
 //  Sticker Buttons (Garden Theme)
 // ==========================================================
-let gardenStickers = [
+const gardenStickers = [
   "🌻",
   "🌷",
   "🌿",
