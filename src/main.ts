@@ -49,17 +49,17 @@ thickButton.textContent = "Thick Marker";
 toolContainer.appendChild(thickButton);
 
 // --- Sticker buttons (Row 3 - NEW) ---
-const fishButton = document.createElement("button");
-fishButton.textContent = "🐟";
-stickerContainer.appendChild(fishButton);
+const sunflowerButton = document.createElement("button");
+sunflowerButton.textContent = "🌻";
+stickerContainer.appendChild(sunflowerButton);
 
 const flowerButton = document.createElement("button");
 flowerButton.textContent = "🌸";
 stickerContainer.appendChild(flowerButton);
 
-const smileButton = document.createElement("button");
-smileButton.textContent = "😀";
-stickerContainer.appendChild(smileButton);
+const roseButton = document.createElement("button");
+roseButton.textContent = "🌷";
+stickerContainer.appendChild(roseButton);
 
 // ==========================================================
 //  Canvas Setup
@@ -125,7 +125,7 @@ class StickerCommand implements DisplayCommand {
   constructor(public x: number, public y: number, public emoji: string) {}
   display(ctx: CanvasRenderingContext2D) {
     ctx.save();
-    ctx.font = "24px sans-serif";
+    ctx.font = "32px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(this.emoji, this.x, this.y);
@@ -294,9 +294,9 @@ function selectTool(thickness: number, selectedButton: HTMLButtonElement) {
     const btn of [
       thinButton,
       thickButton,
-      fishButton,
+      sunflowerButton,
       flowerButton,
-      smileButton,
+      roseButton,
     ]
   ) {
     btn.classList.remove("selectedTool");
@@ -313,7 +313,7 @@ thickButton.addEventListener("click", () => selectTool(6, thickButton));
 // ==========================================================
 
 // Initial stickers array — this defines all available stickers.
-let stickers = ["🐟", "🌸", "😀"];
+let stickers = ["🌻", "🌸", "🌷"];
 
 // Function to rebuild the sticker buttons from the array
 function renderStickerButtons() {
