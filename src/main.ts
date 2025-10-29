@@ -254,6 +254,36 @@ redoButton.addEventListener("click", () => {
 });
 
 // ==========================================================
+//  Export Button (Step 10)
+// ==========================================================
+const exportButton = document.createElement("button");
+exportButton.textContent = "Export PNG";
+actionContainer.appendChild(exportButton);
+
+exportButton.addEventListener("click", () => {
+  // 1️ Create a new high-res canvas
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = 1024;
+  exportCanvas.height = 1024;
+  const exportCtx = exportCanvas.getContext("2d");
+  if (!exportCtx) return;
+
+  // 2️ Scale context to 4x since your original canvas is 256×256
+  exportCtx.scale(4, 4);
+
+  // 3️ Draw all permanent display commands (ignore previews)
+  for (const cmd of displayList) {
+    cmd.display(exportCtx);
+  }
+
+  // 4️⃣ Convert to PNG and trigger download
+  const link = document.createElement("a");
+  link.download = "canvas-export.png";
+  link.href = exportCanvas.toDataURL("image/png");
+  link.click();
+});
+
+// ==========================================================
 //  Marker Tool Selection
 // ==========================================================
 function selectTool(thickness: number, selectedButton: HTMLButtonElement) {
